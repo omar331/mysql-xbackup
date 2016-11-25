@@ -1,7 +1,7 @@
-# Simply mysql migration script
+# Simple PHP innobackupex wrapper 
 
 
 ### Requirements
 
-* mysql clients (mysql and mysqldump)
+
 
