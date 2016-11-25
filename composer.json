@@ -1,0 +1,22 @@
+{
+  "name": "omar331/mysql-backup",
+  "description": "PHP Percona innobackupex wrapper",
+  "keywords": ["mysql","backup", "percona", "wrapper"],
+  "homepage": "http://github.com/omar331/mysql-backup",
+  "type": "library",
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "Omar Alves",
+      "email": "omar331@gmail.com"
+    }
+  ],
+  "require": {
+    "php": ">=5.3.0",
+    "monolog/monolog": "1.0.*",
+    "jms/serializer": "^1.4"
+  },
+  "autoload": {
+    "psr-0": {"MysqlBackup": "src/"}
+  }
+}

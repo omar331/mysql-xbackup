@@ -1,0 +1,18 @@
+<?php
+$migrations = [
+    [
+        'origin' => [
+            'host' => 'localhost',
+            'username' => 'root',
+            'password' => 'root',
+            'port' => '3306',
+            'database' => 'mydatabase'
+        ],
+        'destination' => [
+            'host' => 'localhost',
+            'username' => 'root',
+            'password' => 'root',
+            'database' => 'yourdatabase',
+        ]
+    ],
+];
