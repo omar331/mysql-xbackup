@@ -8,6 +8,10 @@ use \JMS\Serializer\SerializerBuilder;
     'JMS\Serializer\Annotation', __DIR__.'/../../vendor/jms/serializer/src'
 );
 
+use Monolog\Logger;
+use Monolog\Handler\StreamHandler;
+
+
 class BackupManager
 {
     // general backup configurarion
@@ -17,6 +21,9 @@ class BackupManager
     protected $backupInfoFile = 'xtrabackup_info';
 
     protected $serializer;
+
+    /** @var Logger  */
+    protected $logger;
 
 
     public function __construct(Array $config = [])
@@ -33,6 +40,10 @@ class BackupManager
         $this->serializer = SerializerBuilder::create()->build();
 
         $this->config = $config;
+
+        // create a log channel
+        $this->logger = new Logger('name');
+        $this->logger->pushHandler(new StreamHandler( $config['logfile'], Logger::INFO));
     }
 
 
@@ -41,13 +52,16 @@ class BackupManager
      */
     public function run()
     {
-        echo "Deciding backup level to be perfomed...\n";
+        // Prune backup dir
+        $this->prune();
+
+        $this->logger->info("Deciding backup level to be performed...");
 
         $lastFullBackup = $this->getLatestFullBackup();
 
         // No full backup yet? Performs the first one
         if ( ! $lastFullBackup ) {
-            echo " ---> Performing a FULL backup \n";
+            $this->logger->info("Performing a FULL backup ");
             $this->performFullBackup();
 
             return;
@@ -58,18 +72,15 @@ class BackupManager
         $incrementalBackups = $this->getIncremetalBackupsOfBaseFullBackup( $lastFullBackup->getSubdir() );
 
         if ( sizeof($incrementalBackups) < $this->config['incremental_per_full'] ) {
-            echo " ---> Performing an INCREMENTAL backup \n";
+            $this->logger->info("Performing an INCREMENTAL backup");
 
             $this->performIncrementalBackup( $lastFullBackup->getSubdir() );
 
             return;
         } else {
-            echo " ---> Performing a FULL backup \n";
+            $this->logger->info("Performing a FULL backup");
             $this->performFullBackup();
         }
-
-        // Prune backup dir
-        $this->prune();
     }
 
 
@@ -100,7 +111,7 @@ class BackupManager
      * Removes old backup entries
      */
     public function prune() {
-        echo "Pruning backup directory \n";
+        $this->logger->info('Prune backup directory');
 
     }
 
@@ -203,6 +214,11 @@ class BackupManager
 
         $fileInfoPath = sprintf('%s%s%s', $backupPath, DIRECTORY_SEPARATOR, $this->getBackupInfoFile() );
 
+
+        if ( ! file_exists($fileInfoPath) ) {
+            throw new \RuntimeException("Couldn't open %s $fileInfoPath for getting backup information");
+        }
+
         $handle = fopen($fileInfoPath, "r");
         if ( ! $handle ) {
             throw new RuntimeException('Failed to open backup information file %s', $fileInfoPath);
@@ -254,7 +270,13 @@ class BackupManager
             while (($file = readdir($dh)) !== false) {
                 if ( preg_match('/^\./', $file) ) continue;
 
-                $files[] = $this->extractBackupInfo( $file );
+                try {
+                    $backupInfo = $this->extractBackupInfo( $file );
+                    $files[] = $backupInfo;
+                } catch ( \RuntimeException $e ) {
+                    $this->logger->warn( sprintf("Failed to retrieve backup info. File %s  Message: %s ", $file, $e->getMessage() ) );
+                }
+
             }
             closedir($dh);
         }
@@ -282,6 +304,23 @@ class BackupManager
 
         return $r[1];
     }
+
+    /**
+     * @return Logger
+     */
+    public function getLogger()
+    {
+        return $this->logger;
+    }
+
+    /**
+     * @param Logger $logger
+     */
+    public function setLogger($logger)
+    {
+        $this->logger = $logger;
+    }
+
 
 }
 

@@ -1,5 +1,8 @@
 .idea
 config.php
 data/*
+log/*
 vendor
+
+
 
