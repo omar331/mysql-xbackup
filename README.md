@@ -29,7 +29,7 @@ your configuration file. Furthermore it prunes your backup set holding just the 
 Once you meet the system requirementes, run
 
 ```
-composer require omar331/mysql-backup
+composer require omar331/my-back-phpex
 ```
 
 
