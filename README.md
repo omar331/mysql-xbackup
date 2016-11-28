@@ -8,6 +8,10 @@ your configuration file. Furthermore it prunes your backup set holding just the 
 
 ### Features
 
+* Hot non-blocking backup for MySql, MariaDB and Percona Server
+* Full and Incremental backups
+* Detailed log 
+* Sanitization - the system prunes older backups, leaving just the amount defined on the configuration file.
 
 
 ### System Requirements
