@@ -4,12 +4,17 @@ namespace MysqlBackup;
 use JMS\Serializer\Exception\RuntimeException;
 use \JMS\Serializer\SerializerBuilder;
 
+use MysqlBackup\BackupInfoNotFoundException;
+
 \Doctrine\Common\Annotations\AnnotationRegistry::registerAutoloadNamespace(
     'JMS\Serializer\Annotation', __DIR__.'/../../vendor/jms/serializer/src'
 );
 
 use Monolog\Logger;
 use Monolog\Handler\StreamHandler;
+
+use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Finder\Finder;
 
 
 class BackupManager
@@ -24,6 +29,13 @@ class BackupManager
 
     /** @var Logger  */
     protected $logger;
+
+    /** @var Filesystem  */
+    protected $filesystem;
+
+
+    /** @var  Finder */
+    protected $finder;
 
 
     public function __construct(Array $config = [])
@@ -44,6 +56,9 @@ class BackupManager
         // create a log channel
         $this->logger = new Logger('name');
         $this->logger->pushHandler(new StreamHandler( $config['logfile'], Logger::INFO));
+
+        $this->filesystem = new Filesystem();
+        $this->finder = new Finder();
     }
 
 
@@ -52,10 +67,7 @@ class BackupManager
      */
     public function run()
     {
-        // Prune backup dir
-        $this->prune();
-
-        $this->logger->info("Deciding backup level to be performed...");
+        $this->logger->info("Starting backup. Deciding backup level to be performed...");
 
         $lastFullBackup = $this->getLatestFullBackup();
 
@@ -75,12 +87,16 @@ class BackupManager
             $this->logger->info("Performing an INCREMENTAL backup");
 
             $this->performIncrementalBackup( $lastFullBackup->getSubdir() );
-
-            return;
         } else {
             $this->logger->info("Performing a FULL backup");
             $this->performFullBackup();
         }
+
+        // Prune backup dir
+        $this->logger->info("Pruning older backups");
+        $this->prune();
+
+        $this->logger->info('Backup has been finished');
     }
 
 
@@ -108,15 +124,55 @@ class BackupManager
 
 
     /**
-     * Removes old backup entries
+     * Removes older backup entries
      */
     public function prune() {
-        $this->logger->info('Prune backup directory');
+        $count = 0;
 
+        /** @var BackupInfo $backupInfo */
+        foreach( $this->getFullBackupList() as $backupInfo ) {
+            $count++;
+            if ( $count <= $this->config['keep_full_backup'] ) continue;
+
+            $this->removeBackup($backupInfo);
+        }
+    }
+
+    /**
+     * Removes a backup and its incrementals (if any)
+     * @param BackupInfo $info
+     */
+    protected function removeBackup( BackupInfo $info ) {
+        // if it's a full backup, get its incremental ones
+        if ( $info->getIncremental() == 'N' ) {
+            $incrementals = $this->getIncremetalBackupsOfBaseFullBackup( $info->getSubdir() );
+
+            /** @var BackupInfo $incremental */
+            foreach( $incrementals as $incrementalInfo ) {
+                $this->removeBackup( $incrementalInfo, $this->backupInfoToArray($info) );
+            }
+        }
+
+        // remove backup itself
+        $this->logger->info( sprintf('Removing backup %s', $info->getSubdir() ),  $this->backupInfoToArray($info) );
+        $this->removeBackupSubdir( $info->getSubdir() );
+    }
+
+    protected function removeBackupSubdir( $subdir ) {
+        $fullBackupPath = $this->getBackupFullPath( $subdir );
+
+        $this->rmdir( $fullBackupPath );
     }
 
 
-
+    /**
+     * Removes a directory recursively
+     * @param $dir full path to directory
+     *
+     */
+    protected function rmdir( $dir ) {
+        system("rm -rf ".escapeshellarg($dir));
+    }
 
     /**
      * @return string
@@ -142,7 +198,7 @@ class BackupManager
      *
      * @param $baseFullBackupSubdir
      *
-     * @return array
+     * @return array<BackupInfo>
      *
      * @internal param $baseFullBackup
      *
@@ -214,14 +270,13 @@ class BackupManager
 
         $fileInfoPath = sprintf('%s%s%s', $backupPath, DIRECTORY_SEPARATOR, $this->getBackupInfoFile() );
 
-
         if ( ! file_exists($fileInfoPath) ) {
-            throw new \RuntimeException("Couldn't open %s $fileInfoPath for getting backup information");
+            throw new BackupInfoNotFoundException( sprintf("Couldn't open %s to get backup information", $fileInfoPath) );
         }
 
         $handle = fopen($fileInfoPath, "r");
         if ( ! $handle ) {
-            throw new RuntimeException('Failed to open backup information file %s', $fileInfoPath);
+            throw new RuntimeException( sprintf('Failed to open backup information file %s', $fileInfoPath) );
         }
 
         while (($line = fgets($handle)) !== false) {
@@ -273,8 +328,11 @@ class BackupManager
                 try {
                     $backupInfo = $this->extractBackupInfo( $file );
                     $files[] = $backupInfo;
-                } catch ( \RuntimeException $e ) {
+                } catch ( BackupInfoNotFoundException $e ) {
                     $this->logger->warn( sprintf("Failed to retrieve backup info. File %s  Message: %s ", $file, $e->getMessage() ) );
+                    $this->logger->warn( 'Removing this defective backup');
+
+                    $this->removeBackupSubdir( $file );
                 }
 
             }
@@ -305,6 +363,20 @@ class BackupManager
         return $r[1];
     }
 
+
+    /**
+     * Convert one backup info object into array
+     *
+     * @param BackupInfo $backupInfo
+     * @return mixed
+     */
+    public function backupInfoToArray( BackupInfo $backupInfo ) {
+        return json_decode($this->serializer->serialize($backupInfo,'json'), true);
+    }
+
+
+
+
     /**
      * @return Logger
      */
@@ -320,7 +392,6 @@ class BackupManager
     {
         $this->logger = $logger;
     }
-
 
 }
 
