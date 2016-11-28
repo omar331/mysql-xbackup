@@ -1,5 +1,5 @@
 {
-  "name": "omar331/mysql-backup",
+  "name": "omar331/my-back-phpex",
   "description": "PHP Percona innobackupex wrapper. Manage your Mysql alike backups holding as many full and incremental backups you want.",
   "keywords": ["mysql","backup", "percona", "wrapper"],
   "homepage": "http://github.com/omar331/mysql-backup",
