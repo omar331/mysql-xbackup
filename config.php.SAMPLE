@@ -1,0 +1,20 @@
+<?php
+$config = [
+    // ---> directory where backup data is stored
+    'backup_data_dir' => __DIR__ . '/data',
+
+    // ---> number of full backups to be kept
+    'keep_full_backup' => 2,
+
+    // ---> number of incremental backups kept before next fullbackup
+    'incremental_per_full' => 3,
+
+    // ---> log file
+    'logfile' => __DIR__ . '/log/mysql-backup.log',
+
+    // ---> innobackupex command
+    'innobackupex_command' => '/usr/bin/innobackupex'
+];
+
+
+
