@@ -49,3 +49,7 @@ Run
 sudo php backup-run.php
 ``` 
 
+
+### Notes 
+ 
+Log and data directories must exist before the first run.
