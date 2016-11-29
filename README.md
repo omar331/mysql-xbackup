@@ -30,6 +30,8 @@ Once you meet the system requirementes, run
 
 * Download and extract the latest version of **my-back-phpex** in Github.
 
+https://github.com/omar331/my-back-phpex/archive/vX.X.X.tar.gz
+
 * Run 
 
 ```
