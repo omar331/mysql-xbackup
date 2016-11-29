@@ -28,16 +28,20 @@ your configuration file. Furthermore it prunes your backup set holding just the 
 
 Once you meet the system requirementes, run
 
+* Download and extract the latest version of **my-back-phpex** in Github.
+
+* Run 
+
 ```
-composer require omar331/my-back-phpex
+composer install
 ```
+
+Copy the file ```config.php.SAMPLE``` as ```config.php```, edit the file and setup your environment.
 
 
 ### Usage
 
-Copy the file ```config.php.SAMPLE``` as ```config.php```, edit the file and setup your environment.
-
-And the run
+Run
 
 ```
 sudo php backup-run.php

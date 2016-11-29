@@ -7,9 +7,4 @@ include_once('config.php');
 
 $backup = new MysqlBackup\BackupManager( $config );
 
-
 $backup->run();
-
-
-
-
