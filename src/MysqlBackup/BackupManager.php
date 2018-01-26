@@ -25,6 +25,9 @@ class BackupManager
     // filename where backup information is stored
     protected $backupInfoFile = 'xtrabackup_info';
 
+    // file containing checkbox information
+    protected $backupCheckpointFile = "xtrabackup_checkpoints";
+
     protected $serializer;
 
     /** @var Logger  */
@@ -100,6 +103,65 @@ class BackupManager
     }
 
 
+    public function restore()
+    {
+        $this->logger->info("Restoring backup");
+
+        $backupDataDir = $this->config['backup_data_dir'];
+
+        /* Get the latest full backup */
+        $latestFullBackup = $this->getLatestFullBackup();
+
+        /* ... and its incremental ones */
+        $incrementalBackups =  $this->getIncremetalBackupsOfBaseFullBackup( $latestFullBackup->getSubdir() );
+
+        $fullBackupDir = sprintf('%s/%s', $backupDataDir, $latestFullBackup->getSubdir() );
+
+        /*
+         * Prepares the base full backup to be restored
+         */
+        $this->logger->info("Preparing full backup " . $latestFullBackup->getSubdir() );
+
+        $command = sprintf("%s --apply-log --redo-only %s 2>/dev/null 2>&1",
+                                        $this->config['innobackupex_command'],
+                                        $fullBackupDir
+        exec( $command,  $output, $result );
+
+        /*
+         * Prepares the incremental ones
+         */
+        $n = 0;
+        foreach( $incrementalBackups as $incBkp ) {
+            $n++;
+
+            $this->logger->info("Preparing incremetal backup " . $incBkp->getSubdir() );
+
+            $redoOnlyOpt = ( $n < sizeof($incrementalBackups)) ? "--redo-only" : "";
+
+            $incrementalDir = sprintf('%s/%s', $backupDataDir, $incBkp->getSubdir() );
+
+            $command = sprintf("%s --apply-log  %s %s --incremental-dir=%s 2>/dev/null 2>&1",
+                $this->config['innobackupex_command'],
+                $redoOnlyOpt,
+                $fullBackupDir,
+                $incrementalDir
+            );
+
+            exec( $command,  $output, $result );
+        }
+
+        $this->logger->info("Copying restored backup to data dir ");
+
+        $command = sprintf("%s --copy-back  %s 2>/dev/null 2>&1",
+            $this->config['innobackupex_command'],
+            $fullBackupDir
+        );
+        exec( $command,  $output, $result );
+
+        $this->logger->info('Restore has been finished');
+    }
+
+
     /**
      * Perform a full backup
      */
@@ -161,7 +223,7 @@ class BackupManager
     protected function removeBackupSubdir( $subdir ) {
         $fullBackupPath = $this->getBackupFullPath( $subdir );
 
-        $this->rmdir( $fullBackupPath );
+//        $this->rmdir( $fullBackupPath );
     }
 
 
@@ -189,6 +251,27 @@ class BackupManager
     {
         $this->backupInfoFile = $backupInfoFile;
     }
+
+    /**
+     * @return string
+     */
+    public function getBackupCheckpointFile()
+    {
+        return $this->backupCheckpointFile;
+    }
+
+    /**
+     * @param string $backupCheckpointFile
+     * @return BackupManager
+     */
+    public function setBackupCheckpointFile($backupCheckpointFile)
+    {
+        $this->backupCheckpointFile = $backupCheckpointFile;
+        return $this;
+    }
+
+
+
 
 
 
@@ -268,6 +351,7 @@ class BackupManager
 
         $backupPath = $this->getBackupFullPath( $backupSubDir );
 
+        /* Extracts backup info */
         $fileInfoPath = sprintf('%s%s%s', $backupPath, DIRECTORY_SEPARATOR, $this->getBackupInfoFile() );
 
         if ( ! file_exists($fileInfoPath) ) {
@@ -284,6 +368,27 @@ class BackupManager
                 $infos[ trim($r[1]) ] = trim($r[2]);
             }
         }
+        fclose($handle);
+
+
+        /* Extracts backup checkpoint info */
+        $fileCheckpointPath = sprintf('%s%s%s', $backupPath, DIRECTORY_SEPARATOR, $this->getBackupCheckpointFile() );
+
+        if ( ! file_exists($fileCheckpointPath) ) {
+            throw new BackupInfoNotFoundException( sprintf("Couldn't open %s to get backup checkpoint information", $fileCheckpointPath) );
+        }
+
+        $handle = fopen($fileCheckpointPath, "r");
+        if ( ! $handle ) {
+            throw new RuntimeException( sprintf('Failed to open backup checkpoint information file %s', $fileCheckpointPath) );
+        }
+
+        while (($line = fgets($handle)) !== false) {
+            if ( preg_match('/^([^\s]+) = (.*)$/', $line, $r )  ) {
+                $infos[ trim($r[1]) ] = trim($r[2]);
+            }
+        }
+        fclose($handle);
 
         /** @var \MysqlBackup\BackupInfo $info */
         $info = $this->serializer->deserialize( json_encode($infos), 'MysqlBackup\BackupInfo', 'json');
@@ -313,33 +418,42 @@ class BackupManager
      * Get the list of all backup within main backup directory,
      * sorted from lastest to oldest
      *
-     * @return array
+     * @return BackupInfo[]
      */
     protected function getBackupList()
     {
         $backupDataDir = $this->config['backup_data_dir'];
 
+
         $files = [];
 
-        if ($dh = opendir($backupDataDir)) {
-            while (($file = readdir($dh)) !== false) {
-                if ( preg_match('/^\./', $file) ) continue;
+        $dh = opendir($backupDataDir);
 
-                try {
-                    $backupInfo = $this->extractBackupInfo( $file );
-                    $files[] = $backupInfo;
-                } catch ( BackupInfoNotFoundException $e ) {
-                    $this->logger->warn( sprintf("Failed to retrieve backup info. File %s  Message: %s ", $file, $e->getMessage() ) );
-                    $this->logger->warn( 'Removing this defective backup');
+        while (($file = readdir($dh)) ) {
 
-                    $this->removeBackupSubdir( $file );
-                }
+            if ( preg_match('/^\./', $file) ) continue;
 
+            try {
+                $backupInfo = $this->extractBackupInfo( $file );
+                $files[] = $backupInfo;
+            } catch ( BackupInfoNotFoundException $e ) {
+                $this->logger->warn( sprintf("Failed to retrieve backup info. File %s  Message: %s ", $file, $e->getMessage() ) );
             }
-            closedir($dh);
-        }
 
-        rsort($files);
+        }
+        closedir($dh);
+
+        usort($files,
+            function($a, $b) {
+                $ad = $a->getStartTime();
+                $bd = $b->getStartTime();
+
+                if ( $ad == $bd ) return 0;
+
+                return ($ad<$bd)?-1:1;
+            }
+        );
+
 
         return $files;
     }

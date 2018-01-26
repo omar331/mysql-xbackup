@@ -1,6 +1,7 @@
 <?php
 namespace MysqlBackup;
 
+use JMS\Serializer\Annotation as Serializer;
 use JMS\Serializer\Annotation\Type;
 
 
@@ -10,23 +11,25 @@ class BackupInfo {
 	// base full backup (only for incremental backups)
 	protected  $incrementalBaseBackup;
 
-	/**
-	 * @return mixed
-	 */
-	public function getIncrementalBaseBackup()
-	{
-		return $this->incrementalBaseBackup;
-	}
+    /**
+     * @Type("string")
+     */
+	protected $backupType;
 
-	/**
-	 * @param mixed $incrementalBaseBackup
-	 * @return BackupInfo
-	 */
-	public function setIncrementalBaseBackup($incrementalBaseBackup)
-	{
-		$this->incrementalBaseBackup = $incrementalBaseBackup;
-		return $this;
-	}
+    /**
+     * @Type("string")
+     */
+    protected $fromLsn;
+
+    /**
+     * @Type("string")
+     */
+    protected $toLsn;
+
+    /**
+     * @Type("string")
+     */
+    protected $recoverBinlogInfo;
 
 
 	/**
@@ -60,13 +63,13 @@ class BackupInfo {
 	protected  $serverVersion;
 
 	/**
-	 * @Type("string")
+	 * @Type("DateTime<'Y-m-d H:i:s'>")
 	 */
 	protected  $startTime;
 
-	/**
-	 * @Type("string")
-	 */
+    /**
+     * @Type("DateTime<'Y-m-d H:i:s'>")
+     */
 	protected  $endTime;
 
 	/**
@@ -113,6 +116,99 @@ class BackupInfo {
 	 * @Type("string")
 	 */
 	protected  $encrypted;
+
+    /**
+     * @return mixed
+     */
+    public function getFromLsn()
+    {
+        return $this->fromLsn;
+    }
+
+    /**
+     * @param mixed $fromLsn
+     * @return BackupInfo
+     */
+    public function setFromLsn($fromLsn)
+    {
+        $this->fromLsn = $fromLsn;
+        return $this;
+    }
+
+    /**
+     * @return mixed
+     */
+    public function getToLsn()
+    {
+        return $this->toLsn;
+    }
+
+    /**
+     * @param mixed $toLsn
+     * @return BackupInfo
+     */
+    public function setToLsn($toLsn)
+    {
+        $this->toLsn = $toLsn;
+        return $this;
+    }
+
+    /**
+     * @return mixed
+     */
+    public function getRecoverBinlogInfo()
+    {
+        return $this->recoverBinlogInfo;
+    }
+
+    /**
+     * @param mixed $recoverBinlogInfo
+     * @return BackupInfo
+     */
+    public function setRecoverBinlogInfo($recoverBinlogInfo)
+    {
+        $this->recoverBinlogInfo = $recoverBinlogInfo;
+        return $this;
+    }
+
+
+
+    /**
+     * @return mixed
+     */
+    public function getIncrementalBaseBackup()
+    {
+        return $this->incrementalBaseBackup;
+    }
+
+    /**
+     * @param mixed $incrementalBaseBackup
+     * @return BackupInfo
+     */
+    public function setIncrementalBaseBackup($incrementalBaseBackup)
+    {
+        $this->incrementalBaseBackup = $incrementalBaseBackup;
+        return $this;
+    }
+
+    /**
+     * @return mixed
+     */
+    public function getBackupType()
+    {
+        return $this->backupType;
+    }
+
+    /**
+     * @param mixed $backupType
+     * @return BackupInfo
+     */
+    public function setBackupType($backupType)
+    {
+        $this->backupType = $backupType;
+        return $this;
+    }
+
 
 	/**
 	 * @return mixed
@@ -438,4 +534,13 @@ class BackupInfo {
 		$this->encrypted = $encrypted;
 		return $this;
 	}
+
+    /**
+     * checks whether it's a full backup or not
+     *
+     * @return bool
+     */
+	public function isFull() {
+	    return preg_match('/^full/', $this->getBackupType() ) == 1;
+    }
 }

@@ -1,0 +1,14 @@
+version: '2'
+services:
+    restore:
+        build: ./docker/restore
+        image: omar331/mysql-restore:latest
+        volumes:
+          - ./:/opt/app
+
+          # ---> restore from
+          - /home/omar/tmp/mysql/share/bkps:/opt/backup-from
+
+          # ---> restore to
+          - /home/omar/tmp/mysql/restore/data:/var/lib/mysql
+
