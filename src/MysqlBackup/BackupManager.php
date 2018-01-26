@@ -125,6 +125,7 @@ class BackupManager
         $command = sprintf("%s --apply-log --redo-only %s 2>/dev/null 2>&1",
                                         $this->config['innobackupex_command'],
                                         $fullBackupDir
+                            );
         exec( $command,  $output, $result );
 
         /*
