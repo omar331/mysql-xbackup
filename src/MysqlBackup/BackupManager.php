@@ -89,7 +89,10 @@ class BackupManager
         if ( sizeof($incrementalBackups) < $this->config['incremental_per_full'] ) {
             $this->logger->info("Performing an INCREMENTAL backup");
 
-            $this->performIncrementalBackup( $lastFullBackup->getSubdir() );
+            $lastIncrementalBackup = end($incrementalBackups);
+
+
+            $this->performIncrementalBackup( $lastIncrementalBackup->getSubdir() );
         } else {
             $this->logger->info("Performing a FULL backup");
             $this->performFullBackup();
