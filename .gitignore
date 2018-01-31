@@ -3,6 +3,6 @@ config.php
 data/*
 log/*
 vendor
-
+envvars
 
 

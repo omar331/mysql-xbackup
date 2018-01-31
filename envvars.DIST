@@ -1,0 +1,11 @@
+#
+#  --> extract backups from this directory
+#
+export RESTORE_BKP_FROM_DIR=/home/omar/tmp/mysql/share/bkps
+
+#
+#  --> restore backup to this directory
+#
+export RESTORE_BKP_TO_DIR=/home/omar/tmp/mysql/restore/data
+
+

@@ -7,8 +7,11 @@ services:
           - ./:/opt/app
 
           # ---> restore from
-          - /home/omar/tmp/mysql/share/bkps:/opt/backup-from
+          - ${RESTORE_BKP_FROM_DIR}:/opt/backup-from
 
           # ---> restore to
-          - /home/omar/tmp/mysql/restore/data:/var/lib/mysql
+          - ${RESTORE_BKP_TO_DIR}:/var/lib/mysql
 
+
+        environment:
+          INCREMENTALS_PER_FULL: ${INCREMENTALS_PER_FULL}
