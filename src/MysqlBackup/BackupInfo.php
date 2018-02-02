@@ -174,7 +174,7 @@ class BackupInfo {
 
 
     /**
-     * @return mixed
+     * @return null|BackupInfo
      */
     public function getIncrementalBaseBackup()
     {
@@ -182,10 +182,10 @@ class BackupInfo {
     }
 
     /**
-     * @param mixed $incrementalBaseBackup
+     * @param null|BackupInfo $incrementalBaseBackup
      * @return BackupInfo
      */
-    public function setIncrementalBaseBackup($incrementalBaseBackup)
+    public function setIncrementalBaseBackup(BackupInfo $incrementalBaseBackup)
     {
         $this->incrementalBaseBackup = $incrementalBaseBackup;
         return $this;

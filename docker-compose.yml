@@ -11,7 +11,3 @@ services:
 
           # ---> restore to
           - ${RESTORE_BKP_TO_DIR}:/var/lib/mysql
-
-
-        environment:
-          INCREMENTALS_PER_FULL: ${INCREMENTALS_PER_FULL}

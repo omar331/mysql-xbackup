@@ -66,37 +66,89 @@ class BackupManager
 
 
     /**
+     * Get latest stored backup
+     *
+     * @return mixed|BackupInfo
+     */
+    public function getLatestBackup() {
+        $backupList = $this->getBackupList();
+        $latestBackup = end($backupList);
+
+        return $latestBackup;
+    }
+
+
+    /**
+     * Get backup incremental sequence from a certain backup.
+     *
+     * If provided backup is a incremental the previous in sequence is
+     * a previous backup that can be either incremental or full. If it's
+     * a incremental we get its previous util we get the full backup.
+     *
+     *
+     * @param BackupInfo $backupInfo
+     * @param array $l
+     * @return BackupInfo[]
+     *
+     */
+    public function getBackupsSequence( BackupInfo $backupInfo, $l = null ) {
+        $ref = $backupInfo;
+
+        $l = [];
+        do {
+            $l[] = $ref;
+            $ref = $ref->getIncrementalBaseBackup();
+        } while ( $ref != null );
+
+        return array_reverse($l);
+    }
+
+
+
+    /**
      * Run backup procedure accordingly config file
      */
     public function run()
     {
         $this->logger->info("Starting backup. Deciding backup level to be performed...");
 
-        $lastFullBackup = $this->getLatestFullBackup();
+        $latestBackup = $this->getLatestBackup();
 
-        // No full backup yet? Performs the first one
-        if ( ! $lastFullBackup ) {
-            $this->logger->info("Performing a FULL backup ");
+        /*
+         * No backups yet? Do a full one
+         */
+        if ( ! $latestBackup ) {
+            $this->logger->info("Performing a FULL backup ZZZ");
             $this->performFullBackup();
 
             return;
         }
 
-        // ... otherwise performe a new incremental backup, unless
-        // it reached the maximum
-        $incrementalBackups = $this->getIncremetalBackupsOfBaseFullBackup( $lastFullBackup->getSubdir() );
-
-        if ( sizeof($incrementalBackups) < $this->config['incremental_per_full'] ) {
-            $this->logger->info("Performing an INCREMENTAL backup");
-
-            $lastIncrementalBackup = end($incrementalBackups);
+        $backupSequence = $this->getBackupsSequence($latestBackup);
 
 
-            $this->performIncrementalBackup( $lastIncrementalBackup->getSubdir() );
-        } else {
-            $this->logger->info("Performing a FULL backup");
-            $this->performFullBackup();
+        $seqSubdir = [];
+        foreach ( $backupSequence as $item ) {
+            $seqSubdir[] =  $item->getSubdir();
         }
+        $this->logger->info("Current backup sequence (before starting new backup)", $seqSubdir);
+
+
+        /* Reached the maximum amount of incremental backups? Perform a new full backup */
+        if ( sizeof($backupSequence) > $this->config['incremental_per_full'] ) {
+            $this->logger->info("Performing a FULL backup NNNN");
+            $this->performFullBackup();
+
+            return;
+        }
+
+        $this->logger->info("Performing an INCREMENTAL backup");
+
+        $incrementalBaseBackup = end($backupSequence);
+
+        /* a new incremental backup is performed using the last backup as its base */
+        $this->performIncrementalBackup( $incrementalBaseBackup->getSubdir() );
+
 
         // Prune backup dir
         $this->logger->info("Pruning older backups");
@@ -166,12 +218,32 @@ class BackupManager
     }
 
 
+    public function getMysqlCredentialStrings() {
+        $user = "";
+        $password = "";
+        if ( array_key_exists('mysql_user', $this->config) ) {
+            $user = "--user=" . $this->config['mysql_user'];
+        }
+
+        if ( array_key_exists('mysql_password', $this->config) ) {
+            $password = "--password=" . $this->config['mysql_password'];
+        }
+
+        return [$user, $password];
+    }
+
+
+
     /**
      * Perform a full backup
      */
     public function performFullBackup() {
         $backupDataDir = $this->config['backup_data_dir'];
-        $command = sprintf("%s %s 2>/dev/null 2>&1", $this->config['innobackupex_command'], $backupDataDir);
+
+        list( $userStr, $passwordStr ) = $this->getMysqlCredentialStrings();
+
+        $command = sprintf("%s %s %s %s 2>/dev/null 2>&1", $this->config['innobackupex_command'], $backupDataDir, $userStr, $passwordStr);
+
         exec( $command,  $output, $result );
     }
 
@@ -183,7 +255,20 @@ class BackupManager
      */
     public function performIncrementalBackup( $baseFullBackupSubdir  ) {
         $backupDataDir = $this->config['backup_data_dir'];
-        $command = sprintf("%s --incremental %s --incremental-basedir=%s%s%s  2>/dev/null 2>&1", $this->config['innobackupex_command'], $backupDataDir, $this->config['backup_data_dir'], DIRECTORY_SEPARATOR, $baseFullBackupSubdir );
+
+        list( $userStr, $passwordStr ) = $this->getMysqlCredentialStrings();
+
+
+        $command = sprintf("%s %s %s --incremental %s --incremental-basedir=%s%s%s  2>/dev/null 2>&1",
+                                $this->config['innobackupex_command'],
+                                $userStr,
+                                $passwordStr,
+                                $backupDataDir,
+                                $this->config['backup_data_dir'],
+                                DIRECTORY_SEPARATOR,
+                                $baseFullBackupSubdir
+                            );
+
         exec( $command,  $output, $result );
     }
 
@@ -295,8 +380,7 @@ class BackupManager
 
         /** @var BackupInfo $backupInfo */
         foreach( $this->getBackupList() as $backupInfo ) {
-            if ( $backupInfo->getIncremental() != 'Y' ) continue;
-
+            if ( $backupInfo->isFull() ) continue;
             if ( $backupInfo->getIncrementalBaseBackup() != $baseFullBackupSubdir ) continue;
 
             $list[] = $backupInfo;
@@ -464,7 +548,7 @@ class BackupManager
 
 
     /**
-     * Extract base full backup from tool command line
+     * Extract base backup from tool command line
      * @param $toolCommand
      *
      * @return null|string
@@ -478,7 +562,9 @@ class BackupManager
         // try to get only the filename
         if ( ! preg_match('#([^\/\\\\]*)$#', $baseDir, $r ) ) return null;
 
-        return $r[1];
+        $refBaseDir = $r[1];
+
+        return $this->extractBackupInfo( $refBaseDir );
     }
 
 
