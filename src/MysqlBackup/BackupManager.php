@@ -149,12 +149,12 @@ class BackupManager
         /* a new incremental backup is performed using the last backup as its base */
         $this->performIncrementalBackup( $incrementalBaseBackup->getSubdir() );
 
+        $this->logger->info('Backup has been finished');
 
         // Prune backup dir
         $this->logger->info("Pruning older backups");
         $this->prune();
 
-        $this->logger->info('Backup has been finished');
     }
 
 
@@ -280,39 +280,57 @@ class BackupManager
     public function prune() {
         $count = 0;
 
-        /** @var BackupInfo $backupInfo */
-        foreach( $this->getFullBackupList() as $backupInfo ) {
-            $count++;
-            if ( $count <= $this->config['keep_full_backup'] ) continue;
+        /*
+         *  Determines the reference backup
+         *
+         */
+        /** @var BackupInfo $firstBackupToRemove */
+        $firstBackupToRemove = null;
 
-            $this->removeBackup($backupInfo);
+        $fullBackupList = array_reverse( $this->getFullBackupList() );
+        foreach( $fullBackupList as $backupInfo ) {
+            $count++;
+            if ( $count < $this->config['keep_full_backup'] ) continue;
+
+            $firstBackupToRemove = $backupInfo;
+            break;
+        }
+
+        if ( ! $firstBackupToRemove ) {
+            $this->logger->info('No backups to prune');
+            return;
+        }
+
+        $removeOlderThan = $firstBackupToRemove->getEndTime();
+
+        $this->logger->info("Pruning backups older than " . $removeOlderThan->format('Y-m-d H:i:s') );
+
+        /*
+         * Removes older backups
+         */
+        $backupList = $this->getBackupList();
+
+        /** @var BackupInfo $bkpInfo */
+        foreach( $backupList as $bkpInfo ) {
+            if ( $bkpInfo->getEndTime() < $removeOlderThan ) {
+                $this->removeBackup( $bkpInfo );
+            }
         }
     }
 
     /**
-     * Removes a backup and its incrementals (if any)
+     * Removes a backup
      * @param BackupInfo $info
      */
     protected function removeBackup( BackupInfo $info ) {
-        // if it's a full backup, get its incremental ones
-        if ( $info->getIncremental() == 'N' ) {
-            $incrementals = $this->getIncremetalBackupsOfBaseFullBackup( $info->getSubdir() );
-
-            /** @var BackupInfo $incremental */
-            foreach( $incrementals as $incrementalInfo ) {
-                $this->removeBackup( $incrementalInfo, $this->backupInfoToArray($info) );
-            }
-        }
-
         // remove backup itself
-        $this->logger->info( sprintf('Removing backup %s', $info->getSubdir() ),  $this->backupInfoToArray($info) );
+        $this->logger->info( sprintf('Removing backup %s', $info->getSubdir() ) );
         $this->removeBackupSubdir( $info->getSubdir() );
     }
 
     protected function removeBackupSubdir( $subdir ) {
         $fullBackupPath = $this->getBackupFullPath( $subdir );
-
-//        $this->rmdir( $fullBackupPath );
+        $this->rmdir( $fullBackupPath );
     }
 
 
@@ -406,7 +424,7 @@ class BackupManager
 
     /**
      * Get all full backups within backup directory
-     * @return array
+     * @return BackupInfo[]
      */
     protected function getFullBackupList()
     {
